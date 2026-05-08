@@ -26,7 +26,7 @@ export async function POST(req: NextRequest) {
     const admins = await prisma.user.findMany({ where: { role: { in: ["ADMIN", "DEVELOPER"] } } });
     if (admins.length) {
       await prisma.notification.createMany({
-        data: admins.map((a) => ({
+        data: admins.map((a: { id: string }) => ({
           userId: a.id, type: "COMPLAINT_UPDATE" as any,
           title: "New Complaint Filed",
           body: `${complaintId}: ${subject}`,

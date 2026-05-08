@@ -1,6 +1,20 @@
+/**
+ * middleware.ts
+ *
+ * Runs in the Next.js Edge Runtime — must NOT import any Node.js-only modules.
+ *
+ * Previously this imported `verifyAccessToken` from `./lib/jwt` which pulls in
+ * `jsonwebtoken`. That library uses `process.version` and `process.nextTick`,
+ * both of which are unavailable in the Edge Runtime, causing Vercel build
+ * warnings and potential runtime failures.
+ *
+ * Fix: use `verifyJwtEdge` from `./lib/jwt-edge` which is implemented entirely
+ * with the standard Web Crypto API and is fully Edge-compatible.
+ */
+
 import { NextResponse } from "next/server";
 import type { NextRequest } from "next/server";
-import { verifyAccessToken } from "./lib/jwt";
+import { verifyJwtEdge } from "./lib/jwt-edge";
 
 const PUBLIC_PATHS = [
   "/",
@@ -24,7 +38,7 @@ const ROLE_ROUTES: Record<string, string[]> = {
   STUDENT: ["/dashboard"],
 };
 
-export function middleware(request: NextRequest) {
+export async function middleware(request: NextRequest) {
   const { pathname } = request.nextUrl;
 
   // Allow public paths
@@ -55,7 +69,13 @@ export function middleware(request: NextRequest) {
   }
 
   try {
-    const payload = verifyAccessToken(token) as any;
+    const secret = process.env.JWT_ACCESS_SECRET;
+    if (!secret) {
+      throw new Error("JWT_ACCESS_SECRET environment variable is not set");
+    }
+
+    // verifyJwtEdge uses Web Crypto API — fully Edge Runtime compatible
+    const payload = await verifyJwtEdge(token, secret);
 
     // Developer-only routes
     if (pathname.startsWith("/developer") || pathname.startsWith("/api/developer")) {

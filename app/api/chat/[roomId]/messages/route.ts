@@ -1,8 +1,9 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 
-export async function GET(req: NextRequest, { params }: { params: { roomId: string } }) {
+export async function GET(req: NextRequest, { params }: { params: Promise<{ roomId: string }> }) {
   try {
+    const { roomId } = await params;
     const userId = req.headers.get("x-user-id")!;
     const { searchParams } = new URL(req.url);
     const cursor = searchParams.get("cursor");
@@ -10,12 +11,12 @@ export async function GET(req: NextRequest, { params }: { params: { roomId: stri
 
     // Verify membership
     const member = await prisma.chatRoomMember.findUnique({
-      where: { chatRoomId_userId: { chatRoomId: params.roomId, userId } },
+      where: { chatRoomId_userId: { chatRoomId: roomId, userId } },
     });
     if (!member) return NextResponse.json({ error: "Not a member of this room" }, { status: 403 });
 
     const messages = await prisma.message.findMany({
-      where: { chatRoomId: params.roomId },
+      where: { chatRoomId: roomId },
       orderBy: { createdAt: "desc" },
       take: limit,
       ...(cursor && { cursor: { id: cursor }, skip: 1 }),
@@ -33,7 +34,7 @@ export async function GET(req: NextRequest, { params }: { params: { roomId: stri
 
     // Mark as read
     await prisma.chatRoomMember.update({
-      where: { chatRoomId_userId: { chatRoomId: params.roomId, userId } },
+      where: { chatRoomId_userId: { chatRoomId: roomId, userId } },
       data: { lastReadAt: new Date() },
     });
 
@@ -47,18 +48,19 @@ export async function GET(req: NextRequest, { params }: { params: { roomId: stri
 }
 
 // REST fallback for sending messages (Socket.IO preferred)
-export async function POST(req: NextRequest, { params }: { params: { roomId: string } }) {
+export async function POST(req: NextRequest, { params }: { params: Promise<{ roomId: string }> }) {
   try {
+    const { roomId } = await params;
     const userId = req.headers.get("x-user-id")!;
     const { content, type = "TEXT", mediaUrl } = await req.json();
 
     const member = await prisma.chatRoomMember.findUnique({
-      where: { chatRoomId_userId: { chatRoomId: params.roomId, userId } },
+      where: { chatRoomId_userId: { chatRoomId: roomId, userId } },
     });
     if (!member) return NextResponse.json({ error: "Not a member" }, { status: 403 });
 
     const message = await prisma.message.create({
-      data: { chatRoomId: params.roomId, senderId: userId, content, type: type as any, mediaUrl },
+      data: { chatRoomId: roomId, senderId: userId, content, type: type as any, mediaUrl },
       include: {
         sender: {
           select: {

@@ -67,7 +67,7 @@ export async function POST(req: NextRequest) {
 
     if (matching.length > 0) {
       await prisma.notification.createMany({
-        data: matching.map((s) => ({
+        data: matching.map((s: { id: string; userId: string }) => ({
           userId: s.userId,
           type: "JOB_POSTED" as any,
           title: "New Job Opportunity",

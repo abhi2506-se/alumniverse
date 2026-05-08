@@ -4,6 +4,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import bcrypt from "bcryptjs";
 import { prisma } from "@/lib/prisma";
+import type { Prisma } from "@prisma/client";
 import { sendEmail, generateOTP } from "@/lib/email";
 import { rateLimiter } from "@/lib/rateLimit";
 import { generateSlug } from "@/lib/utils";
@@ -30,7 +31,7 @@ export async function POST(req: NextRequest) {
     const { email, password, role, ...profileData } = parsed.data;
     const passwordHash = await bcrypt.hash(password, Number(process.env.BCRYPT_ROUNDS) || 12);
 
-    const user = await prisma.$transaction(async (tx) => {
+    const user = await prisma.$transaction(async (tx: Prisma.TransactionClient) => {
       const newUser = await tx.user.create({
         data: { email, passwordHash, role: role.toUpperCase() as any, status: "PENDING" },
       });
@@ -100,7 +101,7 @@ export async function POST(req: NextRequest) {
     const admins = await prisma.user.findMany({ where: { role: "ADMIN" } });
     if (admins.length) {
       await prisma.notification.createMany({
-        data: admins.map((a) => ({
+        data: admins.map((a: { id: string }) => ({
           userId: a.id,
           type: "ACCOUNT_APPROVED" as any,
           title: "New Registration",

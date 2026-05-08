@@ -1,20 +1,22 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
+import type { Prisma } from "@prisma/client";
 import { sendEmail } from "@/lib/email";
 
-export async function PATCH(req: NextRequest, { params }: { params: { id: string } }) {
+export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   try {
+    const { id } = await params;
     const adminId = req.headers.get("x-user-id")!;
     const role = req.headers.get("x-user-role")!;
     if (!["ADMIN", "DEVELOPER"].includes(role)) return NextResponse.json({ error: "Admin only" }, { status: 403 });
 
     const { status, remarks } = await req.json();
-    const old = await prisma.complaint.findUnique({ where: { id: params.id } });
+    const old = await prisma.complaint.findUnique({ where: { id: id } });
     if (!old) return NextResponse.json({ error: "Complaint not found" }, { status: 404 });
 
-    const updated = await prisma.$transaction(async (tx) => {
+    const updated = await prisma.$transaction(async (tx: Prisma.TransactionClient) => {
       const c = await tx.complaint.update({
-        where: { id: params.id },
+        where: { id: id },
         data: {
           status, remarks,
           resolvedAt: ["RESOLVED", "REJECTED"].includes(status) ? new Date() : undefined,
@@ -23,7 +25,7 @@ export async function PATCH(req: NextRequest, { params }: { params: { id: string
         include: { filer: true },
       });
       await tx.complaintUpdate.create({
-        data: { complaintId: params.id, updatedBy: adminId, oldStatus: old.status, newStatus: status, remark: remarks },
+        data: { complaintId: id, updatedBy: adminId, oldStatus: old.status, newStatus: status, remark: remarks },
       });
       return c;
     });
@@ -48,9 +50,10 @@ export async function PATCH(req: NextRequest, { params }: { params: { id: string
   }
 }
 
-export async function GET(_req: NextRequest, { params }: { params: { id: string } }) {
+export async function GET(_req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
+  const { id } = await params;
   const complaint = await prisma.complaint.findUnique({
-    where: { id: params.id },
+    where: { id: id },
     include: {
       filer: { select: { email: true, studentProfile: { select: { firstName: true, lastName: true } }, alumniProfile: { select: { firstName: true, lastName: true } } } },
       updates: { orderBy: { createdAt: "asc" } },

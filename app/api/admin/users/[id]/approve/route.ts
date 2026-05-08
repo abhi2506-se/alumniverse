@@ -3,16 +3,17 @@ import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { sendEmail } from "@/lib/email";
 
-export async function PATCH(req: NextRequest, { params }: { params: { id: string } }) {
+export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   const role = req.headers.get("x-user-role")!;
   if (!["ADMIN", "DEVELOPER"].includes(role)) return NextResponse.json({ error: "Forbidden" }, { status: 403 });
 
   try {
+    const { id } = await params;
     const { action } = await req.json(); // "approve" | "reject" | "ban" | "suspend"
     const statusMap: Record<string, string> = { approve: "ACTIVE", reject: "BANNED", ban: "BANNED", suspend: "SUSPENDED" };
 
     const user = await prisma.user.update({
-      where: { id: params.id },
+      where: { id },
       data: { status: statusMap[action] as any },
     });
 
@@ -37,7 +38,7 @@ export async function PATCH(req: NextRequest, { params }: { params: { id: string
         userId: req.headers.get("x-user-id") || undefined,
         action: `user.${action}`,
         entity: "User",
-        entityId: params.id,
+        entityId: id,
         newValue: { status: statusMap[action] },
       },
     });

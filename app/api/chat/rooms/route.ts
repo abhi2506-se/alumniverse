@@ -29,9 +29,10 @@ export async function GET(req: NextRequest) {
       orderBy: { chatRoom: { updatedAt: "desc" } },
     });
 
+    type MembershipItem = (typeof memberships)[number];
     const rooms = memberships
-      .filter((m) => m.chatRoom.isActive)
-      .map((m) => ({
+      .filter((m: MembershipItem) => m.chatRoom.isActive)
+      .map((m: MembershipItem) => ({
         ...m.chatRoom,
         lastMessage: m.chatRoom.messages[0] || null,
         isPinned: m.isPinned,
