@@ -1,0 +1,788 @@
+// ════════════════════════════════════════════════════════════════════════════
+//  AlumniVerse — Prisma Schema
+// ════════════════════════════════════════════════════════════════════════════
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider  = "postgresql"
+  url       = env("DATABASE_URL")
+  // DIRECT_URL is only needed for connection pooling (e.g. Neon/Supabase PgBouncer)
+  // If you're running a plain local Postgres, you can comment this out
+  directUrl = env("DIRECT_URL")
+}
+
+enum Role {
+  STUDENT
+  ALUMNI
+  ADMIN
+  DEVELOPER
+}
+
+enum AccountStatus {
+  PENDING
+  ACTIVE
+  SUSPENDED
+  BANNED
+}
+
+enum Gender {
+  MALE
+  FEMALE
+  OTHER
+  PREFER_NOT_TO_SAY
+}
+
+enum ConnectionStatus {
+  PENDING
+  ACCEPTED
+  REJECTED
+  BLOCKED
+}
+
+enum MeetingStatus {
+  SCHEDULED
+  IN_PROGRESS
+  COMPLETED
+  CANCELLED
+}
+
+enum ComplaintStatus {
+  PENDING
+  UNDER_REVIEW
+  INVESTIGATING
+  RESOLVED
+  REJECTED
+}
+
+enum NotificationType {
+  CONNECTION_REQUEST
+  CONNECTION_ACCEPTED
+  MENTORSHIP_REQUEST
+  MENTORSHIP_ACCEPTED
+  MEETING_SCHEDULED
+  MEETING_REMINDER
+  JOB_POSTED
+  EVENT_REGISTERED
+  COMPLAINT_UPDATE
+  ANNOUNCEMENT
+  MESSAGE_RECEIVED
+  ACCOUNT_APPROVED
+  SECURITY_ALERT
+}
+
+enum EventType {
+  ONLINE
+  OFFLINE
+  HYBRID
+}
+
+enum EventStatus {
+  UPCOMING
+  ONGOING
+  COMPLETED
+  CANCELLED
+}
+
+enum JobType {
+  FULL_TIME
+  PART_TIME
+  INTERNSHIP
+  CONTRACT
+  FREELANCE
+}
+
+enum ComplaintCategory {
+  ACADEMIC
+  INFRASTRUCTURE
+  FACULTY_CONDUCT
+  HOSTEL
+  LIBRARY
+  HARASSMENT
+  DISCRIMINATION
+  OTHER
+}
+
+enum BlogStatus {
+  DRAFT
+  PUBLISHED
+  ARCHIVED
+}
+
+enum MessageType {
+  TEXT
+  IMAGE
+  FILE
+  VOICE
+  SYSTEM
+}
+
+model User {
+  id               String        @id @default(cuid())
+  email            String        @unique
+  phone            String?       @unique
+  passwordHash     String
+  role             Role          @default(STUDENT)
+  status           AccountStatus @default(PENDING)
+  emailVerified    Boolean       @default(false)
+  createdAt        DateTime      @default(now())
+  updatedAt        DateTime      @updatedAt
+  lastLoginAt      DateTime?
+  lastLoginIp      String?
+  lastLoginDevice  String?
+  loginAttempts    Int           @default(0)
+  lockedUntil      DateTime?
+
+  studentProfile   StudentProfile?
+  alumniProfile    AlumniProfile?
+  adminProfile     AdminProfile?
+
+  sessions         Session[]
+  otps             OTP[]
+  refreshTokens    RefreshToken[]
+  loginHistory     LoginHistory[]
+
+  sentConnections     Connection[] @relation("ConnectionSender")
+  receivedConnections Connection[] @relation("ConnectionReceiver")
+
+  sentMessages     Message[]    @relation("MessageSender")
+  chatRooms        ChatRoomMember[]
+  notifications    Notification[]
+  deviceTokens     DeviceToken[]
+
+  complaintsFiledBy Complaint[] @relation("ComplaintFiler")
+  complaintsAgainst Complaint[] @relation("ComplaintAgainst")
+  auditLogs         AuditLog[]
+
+  @@map("users")
+  @@index([email])
+  @@index([role])
+  @@index([status])
+}
+
+model StudentProfile {
+  id            String   @id @default(cuid())
+  userId        String   @unique
+  user          User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  rollNumber    String   @unique
+  firstName     String
+  lastName      String
+  gender        Gender?
+  dateOfBirth   DateTime?
+  bio           String?
+  avatarUrl     String?
+  resumeUrl     String?
+  branch        String
+  course        String
+  year          Int
+  section       String?
+  admissionYear Int
+  address       String?
+  city          String?
+  state         String?
+  pincode       String?
+  linkedinUrl   String?
+  githubUrl     String?
+  portfolioUrl  String?
+  twitterUrl    String?
+  skills        String[]
+  interests     String[]
+  languages     String[]
+  profileScore  Int      @default(0)
+  cgpa          Float?
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  mentorshipRequests MentorshipRequest[] @relation("MentorshipStudent")
+  eventRegistrations EventRegistration[]
+  savedJobs          SavedJob[]
+  achievements       Achievement[]
+  endorsements       Endorsement[]       @relation("EndorsementReceiver")
+
+  @@map("student_profiles")
+  @@index([branch])
+  @@index([year])
+}
+
+model AlumniProfile {
+  id              String   @id @default(cuid())
+  userId          String   @unique
+  user            User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  slug            String   @unique
+  firstName       String
+  lastName        String
+  gender          Gender?
+  dateOfBirth     DateTime?
+  bio             String?
+  avatarUrl       String?
+  tagline         String?
+  branch          String
+  course          String
+  passingYear     Int
+  rollNumber      String?
+  currentCompany  String?
+  currentRole     String?
+  currentLocation String?
+  experienceYears Int?
+  linkedinUrl     String?
+  githubUrl       String?
+  portfolioUrl    String?
+  twitterUrl      String?
+  skills          String[]
+  domains         String[]
+  languages       String[]
+  isMentor        Boolean  @default(false)
+  mentorCapacity  Int      @default(5)
+  mentoringAreas  String[]
+  mentorRating    Float    @default(0)
+  totalMentees    Int      @default(0)
+  profileViews    Int      @default(0)
+  isVerified      Boolean  @default(false)
+  verifiedAt      DateTime?
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  experiences        Experience[]
+  educations         Education[]
+  blogs              Blog[]
+  jobs               Job[]
+  careerTimeline     CareerTimelineEntry[]
+  mediaGallery       MediaItem[]
+  badges             Badge[]
+  achievements       Achievement[]
+  mentorshipRequests MentorshipRequest[]  @relation("MentorshipMentor")
+  meetingsHosted     Meeting[]            @relation("MeetingHost")
+  endorsementsGiven  Endorsement[]        @relation("EndorsementGiver")
+
+  @@map("alumni_profiles")
+  @@index([slug])
+  @@index([branch, passingYear])
+  @@index([currentCompany])
+}
+
+model AdminProfile {
+  id          String   @id @default(cuid())
+  userId      String   @unique
+  user        User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  firstName   String
+  lastName    String
+  department  String?
+  permissions String[]
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  @@map("admin_profiles")
+}
+
+model Session {
+  id        String   @id @default(cuid())
+  userId    String
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  token     String   @unique
+  expiresAt DateTime
+  ipAddress String?
+  userAgent String?
+  device    String?
+  createdAt DateTime @default(now())
+
+  @@map("sessions")
+  @@index([userId])
+  @@index([token])
+}
+
+model RefreshToken {
+  id        String   @id @default(cuid())
+  userId    String
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  token     String   @unique
+  expiresAt DateTime
+  used      Boolean  @default(false)
+  createdAt DateTime @default(now())
+
+  @@map("refresh_tokens")
+  @@index([token])
+}
+
+model OTP {
+  id        String   @id @default(cuid())
+  userId    String
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  code      String
+  type      String
+  expiresAt DateTime
+  used      Boolean  @default(false)
+  attempts  Int      @default(0)
+  createdAt DateTime @default(now())
+
+  @@map("otps")
+  @@index([userId, type])
+}
+
+model LoginHistory {
+  id        String   @id @default(cuid())
+  userId    String
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  ipAddress String?
+  device    String?
+  location  String?
+  status    String
+  createdAt DateTime @default(now())
+
+  @@map("login_history")
+  @@index([userId])
+}
+
+model DeviceToken {
+  id        String   @id @default(cuid())
+  userId    String
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  token     String   @unique
+  platform  String
+  createdAt DateTime @default(now())
+
+  @@map("device_tokens")
+}
+
+model Experience {
+  id              String        @id @default(cuid())
+  alumniProfileId String
+  alumniProfile   AlumniProfile @relation(fields: [alumniProfileId], references: [id], onDelete: Cascade)
+  company         String
+  role            String
+  startDate       DateTime
+  endDate         DateTime?
+  isCurrent       Boolean       @default(false)
+  description     String?
+  location        String?
+  skills          String[]
+  createdAt       DateTime      @default(now())
+  updatedAt       DateTime      @updatedAt
+
+  @@map("experiences")
+}
+
+model Education {
+  id              String        @id @default(cuid())
+  alumniProfileId String
+  alumniProfile   AlumniProfile @relation(fields: [alumniProfileId], references: [id], onDelete: Cascade)
+  institution     String
+  degree          String
+  field           String
+  grade           String?
+  startYear       Int
+  endYear         Int?
+  description     String?
+  createdAt       DateTime      @default(now())
+
+  @@map("educations")
+}
+
+model CareerTimelineEntry {
+  id              String        @id @default(cuid())
+  alumniProfileId String
+  alumniProfile   AlumniProfile @relation(fields: [alumniProfileId], references: [id], onDelete: Cascade)
+  title           String
+  organization    String
+  description     String?
+  date            DateTime
+  type            String
+  icon            String?
+  color           String?
+  createdAt       DateTime      @default(now())
+
+  @@map("career_timeline")
+}
+
+model Blog {
+  id              String        @id @default(cuid())
+  alumniProfileId String
+  alumniProfile   AlumniProfile @relation(fields: [alumniProfileId], references: [id], onDelete: Cascade)
+  title           String
+  slug            String        @unique
+  excerpt         String?
+  content         String
+  coverImageUrl   String?
+  tags            String[]
+  status          BlogStatus    @default(DRAFT)
+  readTime        Int?
+  views           Int           @default(0)
+  likes           Int           @default(0)
+  publishedAt     DateTime?
+  createdAt       DateTime      @default(now())
+  updatedAt       DateTime      @updatedAt
+
+  @@map("blogs")
+  @@index([slug])
+  @@index([status])
+}
+
+model MediaItem {
+  id              String        @id @default(cuid())
+  alumniProfileId String
+  alumniProfile   AlumniProfile @relation(fields: [alumniProfileId], references: [id], onDelete: Cascade)
+  url             String
+  type            String
+  caption         String?
+  createdAt       DateTime      @default(now())
+
+  @@map("media_items")
+}
+
+model Badge {
+  id              String        @id @default(cuid())
+  alumniProfileId String
+  alumniProfile   AlumniProfile @relation(fields: [alumniProfileId], references: [id], onDelete: Cascade)
+  name            String
+  description     String?
+  iconUrl         String?
+  color           String?
+  earnedAt        DateTime      @default(now())
+
+  @@map("badges")
+}
+
+model Achievement {
+  id               String         @id @default(cuid())
+  studentProfileId String?
+  studentProfile   StudentProfile? @relation(fields: [studentProfileId], references: [id])
+  alumniProfileId  String?
+  alumniProfile    AlumniProfile?  @relation(fields: [alumniProfileId], references: [id])
+  title            String
+  description      String?
+  date             DateTime?
+  url              String?
+  createdAt        DateTime       @default(now())
+
+  @@map("achievements")
+}
+
+model Endorsement {
+  id         String         @id @default(cuid())
+  skill      String
+  giverId    String
+  giver      AlumniProfile  @relation("EndorsementGiver", fields: [giverId], references: [id])
+  receiverId String
+  receiver   StudentProfile @relation("EndorsementReceiver", fields: [receiverId], references: [id])
+  message    String?
+  createdAt  DateTime       @default(now())
+
+  @@unique([giverId, receiverId, skill])
+  @@map("endorsements")
+}
+
+model Connection {
+  id         String           @id @default(cuid())
+  senderId   String
+  sender     User             @relation("ConnectionSender", fields: [senderId], references: [id])
+  receiverId String
+  receiver   User             @relation("ConnectionReceiver", fields: [receiverId], references: [id])
+  status     ConnectionStatus @default(PENDING)
+  message    String?
+  chatRoom   ChatRoom?
+  createdAt  DateTime         @default(now())
+  updatedAt  DateTime         @updatedAt
+
+  @@unique([senderId, receiverId])
+  @@map("connections")
+  @@index([senderId])
+  @@index([receiverId])
+}
+
+model ChatRoom {
+  id           String           @id @default(cuid())
+  connectionId String           @unique
+  connection   Connection       @relation(fields: [connectionId], references: [id])
+  isActive     Boolean          @default(true)
+  isEncrypted  Boolean          @default(true)
+  createdAt    DateTime         @default(now())
+  updatedAt    DateTime         @updatedAt
+  members      ChatRoomMember[]
+  messages     Message[]
+
+  @@map("chat_rooms")
+}
+
+model ChatRoomMember {
+  id         String    @id @default(cuid())
+  chatRoomId String
+  chatRoom   ChatRoom  @relation(fields: [chatRoomId], references: [id])
+  userId     String
+  user       User      @relation(fields: [userId], references: [id])
+  joinedAt   DateTime  @default(now())
+  lastReadAt DateTime?
+  isPinned   Boolean   @default(false)
+
+  @@unique([chatRoomId, userId])
+  @@map("chat_room_members")
+}
+
+model Message {
+  id         String      @id @default(cuid())
+  chatRoomId String
+  chatRoom   ChatRoom    @relation(fields: [chatRoomId], references: [id])
+  senderId   String
+  sender     User        @relation("MessageSender", fields: [senderId], references: [id])
+  type       MessageType @default(TEXT)
+  content    String?
+  mediaUrl   String?
+  isDeleted  Boolean     @default(false)
+  isEdited   Boolean     @default(false)
+  createdAt  DateTime    @default(now())
+  updatedAt  DateTime    @updatedAt
+  reactions  MessageReaction[]
+
+  @@map("messages")
+  @@index([chatRoomId])
+  @@index([senderId])
+}
+
+model MessageReaction {
+  id        String   @id @default(cuid())
+  messageId String
+  message   Message  @relation(fields: [messageId], references: [id])
+  userId    String
+  emoji     String
+  createdAt DateTime @default(now())
+
+  @@unique([messageId, userId, emoji])
+  @@map("message_reactions")
+}
+
+model MentorshipRequest {
+  id        String         @id @default(cuid())
+  studentId String
+  student   StudentProfile @relation("MentorshipStudent", fields: [studentId], references: [id])
+  mentorId  String
+  mentor    AlumniProfile  @relation("MentorshipMentor", fields: [mentorId], references: [id])
+  status    String         @default("pending")
+  message   String?
+  goals     String[]
+  createdAt DateTime       @default(now())
+  updatedAt DateTime       @updatedAt
+  meetings  Meeting[]
+
+  @@unique([studentId, mentorId])
+  @@map("mentorship_requests")
+}
+
+model Meeting {
+  id                  String             @id @default(cuid())
+  mentorshipRequestId String?
+  mentorshipRequest   MentorshipRequest? @relation(fields: [mentorshipRequestId], references: [id])
+  hostId              String
+  host                AlumniProfile      @relation("MeetingHost", fields: [hostId], references: [id])
+  title               String
+  description         String?
+  scheduledAt         DateTime
+  durationMinutes     Int                @default(60)
+  status              MeetingStatus      @default(SCHEDULED)
+  meetingLink         String?
+  roomId              String?            @unique
+  recordingUrl        String?
+  notes               String?
+  createdAt           DateTime           @default(now())
+  updatedAt           DateTime           @updatedAt
+
+  @@map("meetings")
+  @@index([scheduledAt])
+}
+
+model Job {
+  id              String         @id @default(cuid())
+  alumniProfileId String?
+  alumniProfile   AlumniProfile? @relation(fields: [alumniProfileId], references: [id])
+  title           String
+  company         String
+  description     String
+  requirements    String[]
+  skills          String[]
+  location        String?
+  isRemote        Boolean        @default(false)
+  type            JobType        @default(FULL_TIME)
+  package         String?
+  deadline        DateTime?
+  applyUrl        String?
+  isActive        Boolean        @default(true)
+  views           Int            @default(0)
+  applications    Int            @default(0)
+  branches        String[]
+  years           Int[]
+  minCgpa         Float?
+  createdAt       DateTime       @default(now())
+  updatedAt       DateTime       @updatedAt
+  savedBy         SavedJob[]
+
+  @@map("jobs")
+  @@index([isActive])
+}
+
+model SavedJob {
+  id               String         @id @default(cuid())
+  jobId            String
+  job              Job            @relation(fields: [jobId], references: [id])
+  studentProfileId String
+  student          StudentProfile @relation(fields: [studentProfileId], references: [id])
+  savedAt          DateTime       @default(now())
+
+  @@unique([jobId, studentProfileId])
+  @@map("saved_jobs")
+}
+
+model Event {
+  id           String      @id @default(cuid())
+  title        String
+  description  String
+  coverUrl     String?
+  type         EventType   @default(ONLINE)
+  status       EventStatus @default(UPCOMING)
+  venue        String?
+  meetingLink  String?
+  startDate    DateTime
+  endDate      DateTime
+  maxAttendees Int?
+  tags         String[]
+  isPublic     Boolean     @default(true)
+  createdById  String?
+  createdAt    DateTime    @default(now())
+  updatedAt    DateTime    @updatedAt
+
+  registrations EventRegistration[]
+
+  @@map("events")
+  @@index([startDate])
+  @@index([status])
+}
+
+model EventRegistration {
+  id               String         @id @default(cuid())
+  eventId          String
+  event            Event          @relation(fields: [eventId], references: [id])
+  studentProfileId String?
+  student          StudentProfile? @relation(fields: [studentProfileId], references: [id])
+  registeredAt     DateTime       @default(now())
+  attended         Boolean        @default(false)
+
+  @@unique([eventId, studentProfileId])
+  @@map("event_registrations")
+}
+
+model Complaint {
+  id          String            @id @default(cuid())
+  complaintId String            @unique
+  filerId     String
+  filer       User              @relation("ComplaintFiler", fields: [filerId], references: [id])
+  againstId   String?
+  against     User?             @relation("ComplaintAgainst", fields: [againstId], references: [id])
+  category    ComplaintCategory
+  subject     String
+  description String
+  proofUrls   String[]
+  status      ComplaintStatus   @default(PENDING)
+  remarks     String?
+  priority    String            @default("normal")
+  resolvedAt  DateTime?
+  resolvedBy  String?
+  createdAt   DateTime          @default(now())
+  updatedAt   DateTime          @updatedAt
+  updates     ComplaintUpdate[]
+
+  @@map("complaints")
+  @@index([status])
+  @@index([filerId])
+}
+
+model ComplaintUpdate {
+  id          String    @id @default(cuid())
+  complaintId String
+  complaint   Complaint @relation(fields: [complaintId], references: [id])
+  updatedBy   String
+  oldStatus   String
+  newStatus   String
+  remark      String?
+  createdAt   DateTime  @default(now())
+
+  @@map("complaint_updates")
+}
+
+model Notification {
+  id        String           @id @default(cuid())
+  userId    String
+  user      User             @relation(fields: [userId], references: [id], onDelete: Cascade)
+  type      NotificationType
+  title     String
+  body      String
+  data      Json?
+  isRead    Boolean          @default(false)
+  readAt    DateTime?
+  createdAt DateTime         @default(now())
+
+  @@map("notifications")
+  @@index([userId, isRead])
+}
+
+model Announcement {
+  id          String   @id @default(cuid())
+  title       String
+  content     String
+  coverUrl    String?
+  isPinned    Boolean  @default(false)
+  isPublished Boolean  @default(true)
+  targetRoles Role[]
+  createdById String?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  @@map("announcements")
+}
+
+model AuditLog {
+  id        String   @id @default(cuid())
+  userId    String?
+  user      User?    @relation(fields: [userId], references: [id])
+  action    String
+  entity    String?
+  entityId  String?
+  oldValue  Json?
+  newValue  Json?
+  ipAddress String?
+  userAgent String?
+  createdAt DateTime @default(now())
+
+  @@map("audit_logs")
+  @@index([userId])
+  @@index([entity, entityId])
+}
+
+model RateLimitEntry {
+  id           String    @id @default(cuid())
+  key          String    @unique
+  hits         Int       @default(0)
+  windowStart  DateTime  @default(now())
+  blockedUntil DateTime?
+
+  @@map("rate_limits")
+  @@index([key])
+}
+
+model Branch {
+  id      String   @id @default(cuid())
+  name    String   @unique
+  code    String   @unique
+  courses Course[]
+
+  @@map("branches")
+}
+
+model Course {
+  id       String @id @default(cuid())
+  name     String
+  code     String
+  branchId String
+  branch   Branch @relation(fields: [branchId], references: [id])
+  duration Int
+
+  @@unique([code, branchId])
+  @@map("courses")
+}
